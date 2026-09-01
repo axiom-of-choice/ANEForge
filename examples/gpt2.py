@@ -21,7 +21,7 @@ def main():
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
     tok = AutoTokenizer.from_pretrained(NAME)
-    hf = AutoModelForCausalLM.from_pretrained(NAME, dtype=torch.float32).eval()
+    hf = AutoModelForCausalLM.from_pretrained(NAME, torch_dtype=torch.float32).eval()
     ids = np.asarray(tok.encode(PROMPT), dtype=np.int64)
     print(f"prompt: {PROMPT!r} -> {len(ids)} tokens | K={K} greedy tokens\n")
 
