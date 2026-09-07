@@ -90,6 +90,45 @@ def get_window(window, M: int) -> np.ndarray:
   return w
 
 
+# signal generators: host-side numpy waveform generators (scipy.signal semantics, period 2*pi).
+
+def sawtooth(t, width: float = 1.0) -> np.ndarray:
+  """Periodic sawtooth/triangle waveform, period 2*pi (scipy.signal.sawtooth). `width` in [0,1] sets the rising fraction (1 = rising ramp, 0.5 = triangle, 0 = falling)."""
+  t = np.asarray(t, np.float64)
+  w = np.broadcast_to(np.asarray(width, np.float64), t.shape)
+  tmod = np.mod(t, 2.0 * np.pi)
+  valid = (w >= 0.0) & (w <= 1.0)
+  rise = valid & (tmod < w * 2.0 * np.pi)
+  y = np.full(t.shape, np.nan, np.float64)
+  with np.errstate(divide="ignore", invalid="ignore"):
+    np.copyto(y, tmod / (np.pi * w) - 1.0, where=rise)
+    np.copyto(y, (np.pi * (w + 1.0) - tmod) / (np.pi * (1.0 - w)), where=valid & ~rise)
+  return y.astype(np.float32)
+
+
+def square(t, duty: float = 0.5) -> np.ndarray:
+  """Periodic square wave, period 2*pi (scipy.signal.square): +1 for the first `duty` fraction of the cycle, -1 after. `duty` in [0,1]."""
+  t = np.asarray(t, np.float64)
+  w = np.broadcast_to(np.asarray(duty, np.float64), t.shape)
+  tmod = np.mod(t, 2.0 * np.pi)
+  valid = (w >= 0.0) & (w <= 1.0)
+  high = valid & (tmod < w * 2.0 * np.pi)
+  y = np.full(t.shape, np.nan, np.float64)
+  np.copyto(y, 1.0, where=high)
+  np.copyto(y, -1.0, where=valid & ~high)
+  return y.astype(np.float32)
+
+
+def chirp(t, f0: float, t1: float, f1: float, method: str = "linear") -> np.ndarray:
+  """Frequency-swept cosine (scipy.signal.chirp, linear sweep): frequency ramps from f0 at t=0 to f1 at t=t1. Phase = 2*pi*(f0*t + (f1-f0)*t^2/(2*t1))."""
+  if method not in ("linear", "lin", "li"):
+    raise ValueError(f"chirp: only method='linear' is implemented; got {method!r}")
+  t = np.asarray(t, np.float64)
+  beta = (float(f1) - float(f0)) / float(t1)
+  phase = 2.0 * np.pi * (f0 * t + 0.5 * beta * t * t)
+  return np.cos(phase).astype(np.float32)
+
+
 # FIR filtering. The native 1xK conv backend caps at K<=15; longer kernels route through fft_convolve.
 _MAX_CONV_TAPS = 15
 
@@ -327,6 +366,7 @@ def iir_filter(x, b, a, n_taps: int = 256):
 
 __all__ = [
   "hann", "hamming", "blackman", "kaiser", "bartlett", "tukey", "get_window",
+  "sawtooth", "square", "chirp",
   "fir_filter", "fft_convolve", "freq_filter", "stft", "spectrogram",
   "correlate", "autocorrelate", "iir_filter",
 ]
@@ -472,6 +512,19 @@ def _selftest():
   ac_ane = autocorrelate(ac, max_lag=max_lag)
   full = np.correlate(ac, ac[:256 - max_lag], "valid")
   record("autocorrelate(max_lag=32)", _relerr(ac_ane, full), "GOOD", "vs np.correlate")
+
+  # ---- signal generators vs scipy.signal ------------------------------------ #
+  if have_scipy:
+    tt = np.linspace(0.0, 4.0 * np.pi, 1025)
+    record("sawtooth(width=1.0)", _relerr(sawtooth(tt), ss.sawtooth(tt)),
+           "GOOD", "vs scipy.signal.sawtooth")
+    record("sawtooth(width=0.5)", _relerr(sawtooth(tt, 0.5), ss.sawtooth(tt, 0.5)),
+           "GOOD", "triangle")
+    record("square(duty=0.25)", _relerr(square(tt, 0.25), ss.square(tt, 0.25)),
+           "GOOD", "vs scipy.signal.square")
+    tc = np.linspace(0.0, 8.0, 2049)
+    record("chirp(linear 2->10Hz)", _relerr(chirp(tc, 2.0, 8.0, 10.0), ss.chirp(tc, 2.0, 8.0, 10.0)),
+           "GOOD", "vs scipy.signal.chirp")
 
   # ---- IIR: arch-limited fixed-unroll (truncated impulse response FIR) ------ #
   if have_scipy:
