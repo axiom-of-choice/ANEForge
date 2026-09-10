@@ -325,10 +325,32 @@ def iir_filter(x, b, a, n_taps: int = 256):
   return fir_filter(x, ir, mode="lfilter")
 
 
+def hilbert(x):
+  """Analytic signal via the on-ANE FFT: z(t) = x(t) + i * H[x](t).
+
+  Returns (z_re, z_im) as numpy arrays: z_re == x and z_im is the Hilbert transform.
+  Length must be a power of two (the staged on-ANE FFT constraints); oracle
+  `scipy.signal.hilbert`.
+  """
+  x = np.asarray(x, np.float32).ravel()
+  N = x.shape[0]
+  if N & (N - 1):
+    raise ValueError("hilbert: length must be a power of two (the staged on-ANE FFT pads to one, which would shift the spectrum)")
+  # one-sided response in the freq domain: h[0]=1, h[1..N/2-1]=2, h[N/2]=1, rest 0
+  h = np.zeros(N, np.float32)
+  h[0] = 1.0
+  h[1:N // 2] = 2.0
+  h[N // 2] = 1.0
+  # FFT of x, apply the (real) one-sided response, IFFT back to the analytic signal
+  Xr, Xi = fft(x, np.zeros(N, np.float32), N)
+  y_re, y_im = ifft(Xr * h, Xi * h, N)
+  return y_re.astype(np.float32), y_im.astype(np.float32)
+
+
 __all__ = [
   "hann", "hamming", "blackman", "kaiser", "bartlett", "tukey", "get_window",
   "fir_filter", "fft_convolve", "freq_filter", "stft", "spectrogram",
-  "correlate", "autocorrelate", "iir_filter",
+  "correlate", "autocorrelate", "iir_filter", "hilbert",
 ]
 
 
@@ -472,6 +494,20 @@ def _selftest():
   ac_ane = autocorrelate(ac, max_lag=max_lag)
   full = np.correlate(ac, ac[:256 - max_lag], "valid")
   record("autocorrelate(max_lag=32)", _relerr(ac_ane, full), "GOOD", "vs np.correlate")
+
+  # ---- hilbert (analytic signal) vs scipy.signal.hilbert -------------------- #
+  if have_scipy:
+    hs = rng.standard_normal(256).astype(np.float32)
+    hz_re, hz_im = hilbert(hs)
+    href = ss.hilbert(hs.astype(np.float64))
+    record("hilbert(analytic 256)", _relerr(hz_im, href.imag), "GOOD", "vs scipy.signal.hilbert imag")
+    herr = _relerr(hz_re, hs.astype(np.float64))
+    record("hilbert(re==x 256)", herr, "GOOD", "real part reproduces the signal")
+    # sin -> -cos phase shift (Hilbert = -90 deg)
+    Nt = 256
+    tt = np.arange(Nt, dtype=np.float32) * (2 * np.pi / Nt)
+    _, sz_im = hilbert(np.sin(tt).astype(np.float32))
+    record("hilbert(sin->-cos)", _relerr(sz_im, -np.cos(tt.astype(np.float64))), "GOOD", "phase shift -90 deg")
 
   # ---- IIR: arch-limited fixed-unroll (truncated impulse response FIR) ------ #
   if have_scipy:
