@@ -515,7 +515,9 @@ def _selftest():
 
   # ---- signal generators vs scipy.signal ------------------------------------ #
   if have_scipy:
-    tt = np.linspace(0.0, 4.0 * np.pi, 1025)
+    # 1025 points over 4*pi puts the sawtooth values on dyadic rationals, which are EXACT in
+    # float32 and make the table read ~1e-16; an odd grid reports the real float32 figure (~3e-8).
+    tt = np.linspace(0.0, 4.0 * np.pi, 1000)
     record("sawtooth(width=1.0)", _relerr(sawtooth(tt), ss.sawtooth(tt)),
            "GOOD", "vs scipy.signal.sawtooth")
     record("sawtooth(width=0.5)", _relerr(sawtooth(tt, 0.5), ss.sawtooth(tt, 0.5)),
