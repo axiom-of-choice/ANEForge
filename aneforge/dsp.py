@@ -368,18 +368,23 @@ def hilbert(x):
   """Analytic signal via the on-ANE FFT: z(t) = x(t) + i * H[x](t).
 
   Returns (z_re, z_im) as numpy arrays: z_re == x and z_im is the Hilbert transform.
-  Length must be a power of two (the staged on-ANE FFT constraints); oracle
-  `scipy.signal.hilbert`.
+  Any length >= 2 works -- the staged FFT plans for exactly N and does not pad (a prime N
+  degenerates to one dense N x N DFT, as everywhere else in aneforge.fft).
+  Oracle: `scipy.signal.hilbert`.
   """
   x = np.asarray(x, np.float32).ravel()
   N = x.shape[0]
-  if N & (N - 1):
-    raise ValueError("hilbert: length must be a power of two (the staged on-ANE FFT pads to one, which would shift the spectrum)")
-  # one-sided response in the freq domain: h[0]=1, h[1..N/2-1]=2, h[N/2]=1, rest 0
+  if N < 2: raise ValueError(f"hilbert: need at least 2 samples; got {N}")
+  # one-sided response in the freq domain. Even N has a Nyquist bin to halve, odd N does not --
+  # applying the even branch to an odd length double-counts the top bin (relerr 2.6e-02 vs 1.2e-03
+  # at N=255). Same split as scipy.signal.hilbert.
   h = np.zeros(N, np.float32)
   h[0] = 1.0
-  h[1:N // 2] = 2.0
-  h[N // 2] = 1.0
+  if N % 2 == 0:
+    h[1:N // 2] = 2.0
+    h[N // 2] = 1.0
+  else:
+    h[1:(N + 1) // 2] = 2.0
   # FFT of x, apply the (real) one-sided response, IFFT back to the analytic signal
   Xr, Xi = fft(x, np.zeros(N, np.float32), N)
   y_re, y_im = ifft(Xr * h, Xi * h, N)

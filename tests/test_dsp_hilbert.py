@@ -9,7 +9,8 @@ pytestmark = requires_ane  # hilbert dispatches its FFTs to the ANE
 scipy_signal = pytest.importorskip("scipy.signal")
 
 
-@pytest.mark.parametrize("N", [256, 512, 1024])
+# powers of two, even non-powers of two, and ODD lengths (which need scipy's other filter branch)
+@pytest.mark.parametrize("N", [256, 512, 1024, 300, 384, 255, 101])
 def test_hilbert_matches_scipy(N):
   rng = np.random.default_rng(20260530)
   x = rng.standard_normal(N).astype(np.float32)
@@ -19,10 +20,10 @@ def test_hilbert_matches_scipy(N):
   assert z_im.shape == (N,), f"im shape {z_im.shape} != ({N},)"
   # real part should match the input (analytic signal keeps the signal as its real part)
   re_err = float(np.linalg.norm(z_re - x.astype(np.float64)) / (np.linalg.norm(x.astype(np.float64)) + 1e-30))
-  assert re_err < 5e-2, f"real part relerr {re_err:.3e}"
+  assert re_err < 5e-3, f"real part relerr {re_err:.3e}"
   # imaginary part (Hilbert transform) against scipy
   im_err = float(np.linalg.norm(z_im - ref.imag) / (np.linalg.norm(ref.imag) + 1e-30))
-  assert im_err < 5e-2, f"imag part relerr {im_err:.3e}"
+  assert im_err < 5e-3, f"imag part relerr {im_err:.3e}"
 
 
 def test_hilbert_sine_gives_minus_cosine():
@@ -33,9 +34,10 @@ def test_hilbert_sine_gives_minus_cosine():
   _, z_im = dsp.hilbert(x)
   ref = -np.cos(t.astype(np.float64))
   err = float(np.linalg.norm(z_im - ref) / (np.linalg.norm(ref) + 1e-30))
-  assert err < 5e-2, f"sin->-cos analytic signal relerr {err:.3e}"
+  assert err < 5e-3, f"sin->-cos analytic signal relerr {err:.3e}"
 
 
-def test_hilbert_requires_power_of_two():
+def test_hilbert_rejects_too_short():
   with pytest.raises(ValueError):
-    dsp.hilbert(np.zeros(300, np.float32))
+    dsp.hilbert(np.zeros(1, np.float32))
+
