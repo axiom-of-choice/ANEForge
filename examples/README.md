@@ -90,6 +90,9 @@ on-device across dispatches; via `af.UnrolledTrainer`)
 - `heat_equation.py` - 2D heat equation evolved over many timesteps.
 - `spectral_analysis.py` - FFT-class spectral analysis of a real 1-D signal.
 - `nbody.py` - gravitational force + integration step.
+- `lorenz.py` - the Lorenz attractor: one RK4 step (four field evaluations) fused into ONE
+  program, re-dispatched over a batch of trajectories; renders the butterfly to
+  `docs/assets/lorenz.png`.
 - `paired_fp16.py` - paired-fp16 (compensated) extended precision, no fp32 anywhere.
 
 **Native hardware layers** (Path-A layer kinds Apple's public MIL/CoreML pipeline
