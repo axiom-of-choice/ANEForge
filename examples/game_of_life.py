@@ -28,6 +28,15 @@ def out(s=""):
     sys.stdout.write(s + "\n"); sys.stdout.flush()
 
 
+def secs(s):
+    """One generation is ~0.1 ms, so a whole 100-step run rounds to '0.0s' in seconds."""
+    return f"{s * 1e3:.0f} ms" if s < 1.0 else f"{s:.1f}s"
+
+
+def joules(j):
+    return f"{j * 1e3:.0f} mJ" if j < 1.0 else f"{j:.1f} J"
+
+
 def neighbor_kernel():
     """The 8-neighbour count as a fixed 3x3 conv: all ones except the centre."""
     k = np.ones((1, 1, 3, 3), np.float32)
@@ -99,11 +108,11 @@ def main():
     energy = ANE_RAIL_W * ane_t
 
     out(f"  {GREY}evolve{R}  {CHECK} {STEPS} generations on the ANE "
-        f"{DIM}({wall:.1f}s wall, {ane_t * 1e3 / STEPS:.2f} ms/step){R}")
+        f"{DIM}({secs(wall)} wall, {ane_t * 1e3 / STEPS:.2f} ms/step){R}")
     out(f"  {GREY}field{R}   {DIM}population {pop:.0f} of {N * N} cells, "
         f"{'boolean' if binary else 'NON-BOOLEAN'}{R}")
-    out(f"  {GREY}energy{R}  {DIM}~{ane_t:.1f}s of ANE step time at the measured "
-        f"~{ANE_RAIL_W} W rail ~ {BOLD}{energy:.1f} J{R}{DIM} for the whole run{R}")
+    out(f"  {GREY}energy{R}  {DIM}~{secs(ane_t)} of ANE step time at the measured "
+        f"~{ANE_RAIL_W} W rail ~ {BOLD}{joules(energy)}{R}{DIM} for the whole run{R}")
     out()
 
     wrote = render(frames)
